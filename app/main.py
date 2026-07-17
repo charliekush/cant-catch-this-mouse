@@ -16,7 +16,7 @@ from .perception.camera import Camera
 from .perception.detector import PersonDetector
 from .perception import geometry
 from .sensing import lidar
-from .sensing.ld06_driver import LD06
+from .sensing.ld19_driver import LD19
 from .control import evasion
 from .control.bridge_client import BridgeClient, StubBridge
 from .utils.logging import RunLogger
@@ -34,8 +34,8 @@ def run(model_path, front_port, rear_port, log_path, stub=False):
 
     front_lidar = rear_lidar = None
     if not stub:
-        front_lidar = LD06(front_port)
-        rear_lidar = LD06(rear_port)
+        front_lidar = LD19(front_port)
+        rear_lidar = LD19(rear_port)
 
     try:
         while True:

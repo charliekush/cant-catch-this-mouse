@@ -1,7 +1,7 @@
-"""Dual-LD06 processing: mask -> transform to robot frame -> merge -> sectorize.
+"""Dual-LD19 processing: mask -> transform to robot frame -> merge -> sectorize.
 
 Because the UNO Q sits centrally amid wiring, one LiDAR cannot see 360. We run a
-FRONT and a REAR LD06; each covers the arc the central clutter blocks for the
+FRONT and a REAR LD19; each covers the arc the central clutter blocks for the
 other. Each unit also sees its own body, the clutter, and the other LiDAR as
 phantom returns -- those fixed arcs are masked out per unit before merging.
 

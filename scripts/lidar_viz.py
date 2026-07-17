@@ -1,4 +1,4 @@
-"""Verify the dual-LD06 pipeline: masks, merge, and sector reduction.
+"""Verify the dual-LD19 pipeline: masks, merge, and sector reduction.
 
 Use this during LiDAR bring-up to confirm that (a) the per-unit masks actually
 null out the central-clutter / other-LiDAR phantom returns, and (b) the merged
@@ -10,7 +10,7 @@ matplotlib, it also scatter-plots the merged points.
 
 import argparse
 
-from app.sensing.ld06_driver import LD06
+from app.sensing.ld19_driver import LD19
 from app.sensing import lidar
 
 
@@ -21,7 +21,7 @@ def main():
     ap.add_argument("--plot", action="store_true")
     args = ap.parse_args()
 
-    front, rear = LD06(args.front), LD06(args.rear)
+    front, rear = LD19(args.front), LD19(args.rear)
 
     try:
         while True:

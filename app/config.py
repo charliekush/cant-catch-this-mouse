@@ -22,7 +22,7 @@ PROXIMITY_MAX_BOX_FRAC = 0.90   # near -> proximity ~1
 CAUGHT_PROXIMITY = 0.85
 
 # ---- LiDAR ----
-LIDAR_SCAN_HZ = 10              # LD06 nominal scan rate
+LIDAR_SCAN_HZ = 10              # LD19 nominal scan rate
 # Per-unit angular masks: arcs (deg, robot frame) where each LiDAR sees the
 # central clutter / the other LiDAR / its own body. Points inside are dropped.
 # Measure these once on the real mount and fill them in. (start, end) in degrees.
