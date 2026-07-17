@@ -27,14 +27,14 @@ The primary evaluation metric is **time-to-capture**.
   - **STM32U585 (Zephyr RTOS)** — motor PWM, ultrasonic safety reflex, executes motion commands
 - **ELEGOO Smart Robot Car V4.0** chassis (TB6612 motor driver, DC motors)
 - **USB webcam** — plugged directly into the MPU
-- **2× LDRobot LD06** 2D LiDAR — one front, one rear (see LiDAR note below)
+- **2× LDRobot LD19** 2D LiDAR — one front, one rear (see LiDAR note below)
 - **Ultrasonic sensor** (from kit) — retained purely as an STM32-side emergency-stop backstop
 
 ### Why two LiDARs
 
 The UNO Q sits in the **center** of the top plate, surrounded by wiring and mounts. That central
 clutter obstructs a single LiDAR's 360° sweep no matter where it's placed, and a riser can't clear
-the wire height. So we mount **one LD06 at the front and one at the rear**: each covers the arc the
+the wire height. So we mount **one LD19 at the front and one at the rear**: each covers the arc the
 central obstruction blocks for the other, and the two scans are merged into one 360° picture.
 
 Each unit's body, the central clutter, and the *other* LiDAR appear as fixed phantom returns and are
@@ -49,8 +49,8 @@ Two processors, two very different jobs:
 ```
                  ┌─────────────────────── UNO Q MPU (Debian, Python) ───────────────────────┐
    USB webcam ──▶│ camera ─▶ detector ─▶ geometry (bearing, proximity) ─┐                    │
-   LD06 front ──▶│ lidar (mask ─▶ merge ─▶ sectorize) ──────────────────┼─▶ evasion policy ─┼─┐
-   LD06 rear  ──▶│                                                       ┘                    │ │
+   LD19 front ──▶│ lidar (mask ─▶ merge ─▶ sectorize) ──────────────────┼─▶ evasion policy ─┼─┐
+   LD19 rear  ──▶│                                                       ┘                    │ │
                  └────────────────────────────────────────────────────────────────────────┘ │
                                                                                               │ motion cmd (RPC)
                  ┌─────────────────────── STM32 (Zephyr) ──────────────────────────────────┐ │
@@ -100,8 +100,8 @@ evasion-bot/
 │   │   ├── detector.py         # TFLite person detection
 │   │   └── geometry.py         # bbox → bearing + proximity (pure)
 │   ├── sensing/
-│   │   ├── lidar.py            # LD06 read, mask, merge, sectorize
-│   │   └── ld06_driver.py      # thin wrapper over the LD06 UART driver
+│   │   ├── lidar.py            # LD19 read, mask, merge, sectorize
+│   │   └── ld19_driver.py      # thin wrapper over lds2d's LD19 driver
 │   ├── control/
 │   │   ├── evasion.py          # escape policy (pure)
 │   │   └── bridge_client.py    # RPC to STM32 (motion, ultrasonic backstop)
@@ -125,7 +125,7 @@ evasion-bot/
 2. **Detector on recorded video** — benchmark FPS off-robot. **Week-1 gate: must clear ~10 FPS.**
    Re-run with the LiDAR driver(s) active, since both share the MPU.
 3. **STM32 sketch alone** — motors + ultrasonic reflex, driven by manual RPC calls.
-4. **LiDAR bring-up** — one LD06, then two: verify masks and scan merge with `lidar_viz.py`.
+4. **LiDAR bring-up** — one LD19, then two: verify masks and scan merge with `lidar_viz.py`.
 5. **Join everything** — real bridge, camera, motors, LiDAR.
 
 ---
@@ -133,10 +133,13 @@ evasion-bot/
 ## Setup notes
 
 - Install OpenCV via **apt** (`sudo apt install python3-opencv`), *not* pip, on the board's ARM/Debian.
-- `Arduino_RouterBridge` must be listed in `sketch.yaml`; **verify the RPC API names against the
-  actual library** before writing against them.
+- `Arduino_RouterBridge` (STM32 side) and `arduino.app_utils.Bridge` (MPU side) are both used as
+  documented in `docs/architecture.md`, verified against their actual source.
+- LiDAR parsing uses `lds2d` (`pip install lds2d`) rather than a hand-rolled protocol decoder; see
+  `app/sensing/ld19_driver.py` for the caveat on its LD19 support being unverified on real hardware
+  by lds2d's own maintainers.
 - Keep any STM32 sensor read a single atomic RPC — no multi-round-trip reads.
-- Measure each LD06's mounting offset (x, y, yaw) from the robot center — the scan merge depends on it.
+- Measure each LD19's mounting offset (x, y, yaw) from the robot center — the scan merge depends on it.
 
 ---
 

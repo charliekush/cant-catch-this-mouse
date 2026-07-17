@@ -1,0 +1,4 @@
+lds2d==0.7.0
+numpy==2.5.1
+opencv-python==5.0.0.93
+pyserial==3.5
