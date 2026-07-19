@@ -2,7 +2,7 @@
 # The STM32 sketch lives in sketch/sketch.ino; the MPU Python app lives in app/.
 # Verify field names and structure against your arduino-app-cli version.
 
-name: evasion-bot
+name: mouse-bot
 
 # STM32 / Zephyr side
 sketch:

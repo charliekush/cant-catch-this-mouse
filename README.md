@@ -84,7 +84,7 @@ repeat
 ## Repo layout
 
 ```
-evasion-bot/
+mouse-bot/
 ├── README.md
 ├── sketch.yaml                 # arduino-app-cli build manifest
 ├── .gitignore
