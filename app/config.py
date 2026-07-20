@@ -5,9 +5,16 @@ scattered through the code so tuning stays sane.
 """
 
 # ---- Camera / perception ----
-FRAME_WIDTH = 640
+FRAME_WIDTH = 640                # nominal ESP32 stream resolution (its framesize setting)
 FRAME_HEIGHT = 480
-CAMERA_INDEX = 0                # /dev/video0
+# ESP32-WROVER camera module's MJPEG stream (stock Espressif CameraWebServer
+# layout: stream server on server_port + 1). Default AP IP/port when the
+# module boots in WIFI_AP mode, per ELEGOO's reference firmware. Network
+# prerequisite: the MPU must already be a WiFi client of this AP (or of
+# whatever network the ESP32 is reflashed to join in STA mode) -- camera.py
+# does not join the network for you.
+CAMERA_STREAM_URL = "http://192.168.4.1:81/stream"
+CAMERA_TIMEOUT_S = 5.0           # seconds before a stalled connect/read gives up
 DETECT_SCORE_THRESHOLD = 0.5    # min confidence to count a person detection
 PERSON_CLASS_ID = 0             # class index for "person" in the TFLite model
 

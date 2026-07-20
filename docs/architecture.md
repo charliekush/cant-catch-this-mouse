@@ -4,7 +4,7 @@
 
 | Concern | Processor | Notes |
 |---|---|---|
-| Camera capture | MPU (Debian) | USB webcam via V4L2/OpenCV |
+| Camera capture | MPU (Debian) | ELEGOO kit's ESP32-WROVER camera, MJPEG over HTTP via `urllib` (not V4L2/USB) — see note below |
 | Person detection (TFLite) | MPU | `app/perception/detector.py` |
 | Bearing / proximity | MPU | `app/perception/geometry.py` (pure) |
 | LiDAR read / mask / merge / sectorize | MPU | both LD19s on MPU UART |
@@ -14,6 +14,42 @@
 
 The MPU decides; the STM32 acts and keeps one fast local reflex so a slow vision
 frame can never cause a head-on collision.
+
+## Camera
+
+The robot currently uses the stock ELEGOO ESP32-WROVER camera module that
+ships with the kit (a second, USB-connected webcam plugged directly into the
+UNO Q's own USB host may be added later, but is not present yet). This module
+is its own microcontroller, not a USB device:
+
+- It connects to the main shield only through a 4-pin serial header
+  (`XH2.54-4P`: VCC/GND/TX/RX, UART) used for command relay, never for video.
+- ELEGOO's reference firmware (`docs/ELEGOO Smart Robot Car Kit V4.0
+  2021.04.14/02 Manual & Main Code & APP/04 Code of Carmer (ESP32)/`) boots
+  it in `WIFI_AP` mode with its own SSID and default IP `192.168.4.1`, and
+  registers two HTTP servers via the stock Espressif `app_httpd.cpp`: one on
+  `server_port` (80, `/`, `/control`, `/status`, `/capture` for a single JPEG
+  snapshot) and one on `server_port + 1` (81, `/stream` for the MJPEG feed).
+  A separate TCP socket on port 100 relays JSON motion commands between a
+  connected client and the main board's `Serial2` (UART) — video and control
+  are separate channels, and video never reaches the shield or a USB line.
+
+`app/perception/camera.py` pulls frames from `http://192.168.4.1:81/stream`
+(`config.CAMERA_STREAM_URL`) using the standard library's `urllib` — not
+`requests` (not installed in `.venv`, and not worth adding for this) and not
+`cv2.VideoCapture` on the URL (that backend needs an FFMPEG-enabled OpenCV
+build, which the board's apt `python3-opencv` package isn't guaranteed to
+have; decoding a JPEG buffer via `cv2.imdecode` doesn't need one). It scans
+the byte stream for JPEG SOI/EOI markers rather than parsing the multipart
+boundary and `Content-Length` headers, since a literal `0xFFD8`/`0xFFD9`
+can't appear inside valid JPEG scan data.
+
+**Network prerequisite**: the MPU must already be a WiFi client of the
+ESP32's AP (or of whatever network the ESP32 is reflashed to join in STA
+mode) for any of this to work — `camera.py` does not join the network for
+you. This has not been validated against the real ESP32 yet (see
+`DEVELOPMENT_LOG.md` Next Steps); `StubCamera` in `camera.py` lets
+`python -m app.main --stub` exercise the rest of the loop without it.
 
 ## MPU -> STM32 messages (RPC over the Bridge)
 

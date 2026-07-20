@@ -26,7 +26,11 @@ The primary evaluation metric is **time-to-capture**.
   - **Qualcomm MPU (Debian Linux)** — camera capture, person detection, LiDAR processing, evasion policy
   - **STM32U585 (Zephyr RTOS)** — motor PWM, ultrasonic safety reflex, executes motion commands
 - **ELEGOO Smart Robot Car V4.0** chassis (TB6612 motor driver, DC motors)
-- **USB webcam** — plugged directly into the MPU
+- **Camera** — currently the kit's stock **ESP32-WROVER camera module**: its own
+  microcontroller, hosting a WiFi AP and streaming MJPEG over HTTP from its own
+  web server. It is *not* a USB device — it links to the main shield only via a
+  4-pin UART header for command relay, never for video (see `docs/architecture.md`).
+  A second, USB-connected webcam plugged directly into the MPU may be added later.
 - **2× LDRobot LD19** 2D LiDAR — one front, one rear (see LiDAR note below)
 - **Ultrasonic sensor** (from kit) — retained purely as an STM32-side emergency-stop backstop
 
@@ -48,7 +52,7 @@ Two processors, two very different jobs:
 
 ```
                  ┌─────────────────────── UNO Q MPU (Debian, Python) ───────────────────────┐
-   USB webcam ──▶│ camera ─▶ detector ─▶ geometry (bearing, proximity) ─┐                    │
+   ESP32 cam  ──▶│ camera ─▶ detector ─▶ geometry (bearing, proximity) ─┐                    │
    LD19 front ──▶│ lidar (mask ─▶ merge ─▶ sectorize) ──────────────────┼─▶ evasion policy ─┼─┐
    LD19 rear  ──▶│                                                       ┘                    │ │
                  └────────────────────────────────────────────────────────────────────────┘ │
@@ -96,7 +100,7 @@ mouse-bot/
 │   ├── main.py                 # top-level loop
 │   ├── config.py               # all tunables in one place
 │   ├── perception/
-│   │   ├── camera.py           # USB webcam capture
+│   │   ├── camera.py           # ESP32-WROVER MJPEG capture (kit's stock camera) + StubCamera
 │   │   ├── detector.py         # TFLite person detection
 │   │   └── geometry.py         # bbox → bearing + proximity (pure)
 │   ├── sensing/
@@ -133,6 +137,12 @@ mouse-bot/
 ## Setup notes
 
 - Install OpenCV via **apt** (`sudo apt install python3-opencv`), *not* pip, on the board's ARM/Debian.
+- Camera is the kit's stock ESP32-WROVER module (WiFi AP + MJPEG-over-HTTP), not a USB webcam.
+  `app/perception/camera.py` pulls `config.CAMERA_STREAM_URL` over plain `urllib` — the MPU must
+  already be joined to the ESP32's WiFi AP (`192.168.4.1`) for this to work; see
+  `docs/architecture.md`'s Camera section. Not yet validated against the real ESP32 (on-device
+  bring-up is next — see `DEVELOPMENT_LOG.md`); use `--stub` (`StubCamera`) to run the rest of the
+  loop without it.
 - `Arduino_RouterBridge` (STM32 side) and `arduino.app_utils.Bridge` (MPU side) are both used as
   documented in `docs/architecture.md`, verified against their actual source.
 - LiDAR parsing uses `lds2d` (`pip install lds2d`) rather than a hand-rolled protocol decoder; see

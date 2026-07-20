@@ -12,7 +12,7 @@ import math
 import time
 
 from . import config
-from .perception.camera import Camera
+from .perception.camera import Camera, StubCamera
 from .perception.detector import PersonDetector
 from .perception import geometry
 from .sensing import lidar
@@ -26,8 +26,12 @@ def build_bridge(stub):
     return StubBridge() if stub else BridgeClient()
 
 
+def build_camera(stub):
+    return StubCamera() if stub else Camera()
+
+
 def run(model_path, front_port, rear_port, log_path, stub=False):
-    camera = Camera()
+    camera = build_camera(stub)
     detector = PersonDetector(model_path)
     bridge = build_bridge(stub)
     logger = RunLogger(log_path)
