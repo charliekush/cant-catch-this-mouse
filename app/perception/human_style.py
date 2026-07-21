@@ -33,7 +33,7 @@ try:
 except ImportError:
     cv2 = None
 
-from pose_tracker import PoseTrack, SKELETON, bearing_from_cx
+from .pose_tracker import PoseTrack, SKELETON, bearing_from_cx
 
 
 # ---------------------------------------------------------------------------

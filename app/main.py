@@ -30,9 +30,18 @@ def build_camera(stub):
     return StubCamera() if stub else Camera()
 
 
-def run(model_path, front_port, rear_port, log_path, stub=False):
+def build_detector(model_path, backend=config.DETECTOR_BACKEND):
+    """Both backends implement .best(frame) -> Detection | None, so nothing
+    downstream (geometry, evasion) needs to know which one is running."""
+    if backend == "pose":
+        from .perception.pose_identity import PoseIdentityDetector
+        return PoseIdentityDetector()
+    return PersonDetector(model_path)
+
+
+def run(model_path, front_port, rear_port, log_path, stub=False, backend=None):
     camera = build_camera(stub)
-    detector = PersonDetector(model_path)
+    detector = build_detector(model_path, backend or config.DETECTOR_BACKEND)
     bridge = build_bridge(stub)
     logger = RunLogger(log_path)
 
@@ -97,8 +106,12 @@ def main():
     ap.add_argument("--log", default="run.csv")
     ap.add_argument("--stub", action="store_true",
                     help="run with no hardware (fake bridge, no LiDAR)")
+    ap.add_argument("--backend", choices=["bbox", "pose"],
+                    default=config.DETECTOR_BACKEND,
+                    help="person-detection backend (default: config.DETECTOR_BACKEND)")
     args = ap.parse_args()
-    run(args.model, args.front_port, args.rear_port, args.log, stub=args.stub)
+    run(args.model, args.front_port, args.rear_port, args.log,
+        stub=args.stub, backend=args.backend)
 
 
 if __name__ == "__main__":

@@ -19,7 +19,7 @@ Backends (same interface):
 
   2. MoveNetDetector - MoveNet SinglePose Lightning (.tflite), ~5 ms/frame
      class of model, built for edge devices -> the UNO Q path.
-     Put the model at data/movenet_lightning.tflite
+     Put the model at config.POSE_MODEL_PATH (models/movenet_lightning.tflite)
 
 PoseTracker adds per-keypoint EMA smoothing (stick figure doesn't jitter),
 occlusion handling (low-confidence joints freeze at their last position
@@ -39,8 +39,7 @@ try:
 except ImportError:
     cv2 = None
 
-# ---------------- C920 optics ----------------
-HFOV_DEG = 70.42
+from .. import config
 
 # ---------------- COCO-17 keypoint layout ----------------
 KEYPOINT_NAMES = [
@@ -97,7 +96,7 @@ class PoseTrack:
 # ---------------------------------------------------------------------------
 # Geometry (pure math - unit tested)
 # ---------------------------------------------------------------------------
-def bearing_from_cx(cx: float, hfov_deg: float = HFOV_DEG) -> float:
+def bearing_from_cx(cx: float, hfov_deg: float = config.CAMERA_HFOV_DEG) -> float:
     """True pinhole mapping: bearing = atan((cx - 0.5) / f),
     f = 0.5 / tan(HFOV/2). Exact out to the frame edges."""
     half = math.radians(hfov_deg / 2.0)
@@ -105,7 +104,7 @@ def bearing_from_cx(cx: float, hfov_deg: float = HFOV_DEG) -> float:
     return math.degrees(math.atan2(cx - 0.5, f))
 
 
-def torso_center(kps: np.ndarray, min_conf: float = 0.3):
+def torso_center(kps: np.ndarray, min_conf: float = config.POSE_KP_MIN_CONF):
     """Confidence-weighted center of shoulders+hips; falls back to the mean
     of all confident keypoints if the torso is occluded. Returns
     (cx, cy) or None if nothing is confident."""
@@ -159,7 +158,7 @@ class MoveNetDetector:
     outputs map straight back onto the original frame, so the aspect
     distortion cancels."""
 
-    def __init__(self, model_path: str, min_confidence: float = 0.3):
+    def __init__(self, model_path: str, min_confidence: float = config.POSE_KP_MIN_CONF):
         try:
             from tflite_runtime.interpreter import Interpreter
         except ImportError:                      # laptop with full TF instead
@@ -192,7 +191,8 @@ class MoveNetDetector:
         return PoseDetection(kps=kps)
 
 
-def build_pose_detector(movenet_path: str, min_confidence: float = 0.5):
+def build_pose_detector(movenet_path: str = config.POSE_MODEL_PATH,
+                        min_confidence: float = config.POSE_MIN_CONFIDENCE):
     """MediaPipe if installed (laptop), else MoveNet if the model file
     exists (UNO Q), else a clear error telling you what to install."""
     try:
@@ -230,10 +230,11 @@ class PoseTracker:
     * Lost-target timeout -> track dropped, robot reverts to scan/wander.
     """
 
-    KP_CONF = 0.3
+    KP_CONF = config.POSE_KP_MIN_CONF
 
-    def __init__(self, detector, confirm_frames: int = 3,
-                 alpha: float = 0.5, lost_timeout_s: float = 1.0):
+    def __init__(self, detector, confirm_frames: int = config.POSE_CONFIRM_FRAMES,
+                 alpha: float = config.POSE_EMA_ALPHA,
+                 lost_timeout_s: float = config.POSE_LOST_TIMEOUT_S):
         self.detector = detector
         self.confirm_frames = confirm_frames
         self.alpha = alpha

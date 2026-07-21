@@ -36,11 +36,12 @@ try:
 except ImportError:
     cv2 = None
 
-from pose_tracker import L_SHOULDER, R_SHOULDER, L_HIP, R_HIP
+from .. import config
+from .pose_tracker import L_SHOULDER, R_SHOULDER, L_HIP, R_HIP
 
-H_BINS, S_BINS = 30, 32          # hue-saturation histogram resolution
-KP_CONF = 0.3
-MIN_PATCH_PX = 24                # torso crop must be at least this tall/wide
+H_BINS, S_BINS = config.ID_HIST_H_BINS, config.ID_HIST_S_BINS
+KP_CONF = config.POSE_KP_MIN_CONF
+MIN_PATCH_PX = config.ID_MIN_TORSO_PATCH_PX  # torso crop must be at least this tall/wide
 
 
 # ---------------------------------------------------------------------------
@@ -140,8 +141,9 @@ class IdentityMatcher:
     (name, mean_score) or (None, best_score) when nobody enrolled matches.
     """
 
-    def __init__(self, db: IdentityDB, threshold: float = 0.55,
-                 window: int = 8, min_votes: int = 3):
+    def __init__(self, db: IdentityDB, threshold: float = config.ID_THRESHOLD,
+                 window: int = config.ID_VOTE_WINDOW,
+                 min_votes: int = config.ID_MIN_VOTES):
         self.db = db
         self.threshold = threshold
         self.window = window
@@ -178,7 +180,8 @@ class Enroller:
     """Collects up to n_samples torso signatures, spaced sample_gap_s apart,
     while the person moves around in frame."""
 
-    def __init__(self, n_samples: int = 40, sample_gap_s: float = 0.25):
+    def __init__(self, n_samples: int = config.ENROLL_N_SAMPLES,
+                 sample_gap_s: float = config.ENROLL_SAMPLE_GAP_S):
         self.n_samples = n_samples
         self.sample_gap_s = sample_gap_s
         self.samples = []

@@ -18,6 +18,33 @@ CAMERA_TIMEOUT_S = 5.0           # seconds before a stalled connect/read gives u
 DETECT_SCORE_THRESHOLD = 0.5    # min confidence to count a person detection
 PERSON_CLASS_ID = 0             # class index for "person" in the TFLite model
 
+# ---- Detector backend ----
+# "bbox"  -> PersonDetector (detector.py): TFLite SSD, box-height proximity proxy.
+# "pose"  -> PoseIdentityDetector (pose_identity.py): 17-keypoint pose tracking
+#            gated to enrolled people; unknown people report as no detection.
+# Both implement the same .best(frame) -> Detection | None surface, so
+# geometry.py and the rest of the loop don't change with the backend.
+DETECTOR_BACKEND = "bbox"
+
+# ---- Pose + identity backend ----
+CAMERA_HFOV_DEG = 70.42                    # C920 horizontal FOV; recalibrate per camera
+POSE_MODEL_PATH = "models/movenet_lightning.tflite"  # MoveNet SinglePose Lightning (UNO Q path)
+POSE_MIN_CONFIDENCE = 0.5
+POSE_CONFIRM_FRAMES = 3         # consecutive detections before a track is reported
+POSE_EMA_ALPHA = 0.5            # per-keypoint smoothing factor
+POSE_LOST_TIMEOUT_S = 1.0       # track dropped if unseen this long
+POSE_KP_MIN_CONF = 0.3          # keypoint visibility threshold (tracking + bbox synthesis)
+
+IDENTITY_DIR = "data/identities"           # one .npz per enrolled person
+ID_THRESHOLD = 0.55             # raise toward 0.7 if strangers slip through, lower toward 0.45 in bad light
+ID_VOTE_WINDOW = 8              # frames considered for the identity vote
+ID_MIN_VOTES = 3                # min votes in the window before a decision is trusted
+ID_HIST_H_BINS = 30             # hue bins for the torso appearance histogram
+ID_HIST_S_BINS = 32             # saturation bins
+ID_MIN_TORSO_PATCH_PX = 24      # torso crop must be at least this tall/wide to sign
+ENROLL_N_SAMPLES = 40           # torso signatures captured per enrollment
+ENROLL_SAMPLE_GAP_S = 0.25      # min seconds between captured enrollment samples
+
 # ---- Proximity model ----
 # Person box height (as a fraction of frame height) used as a distance proxy.
 # Larger box = closer person. Tune these two anchors on the real setup.

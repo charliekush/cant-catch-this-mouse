@@ -83,6 +83,14 @@ read + merge + sectorize LiDAR → sector distances (front, FL, FR, left, right,
 repeat
 ```
 
+Person detection is swappable behind `config.DETECTOR_BACKEND` (`--backend` on
+`app.main`): the default `"bbox"` backend (`app/perception/detector.py`) is a
+TFLite bounding-box detector; an alternative `"pose"` backend
+(`app/perception/pose_identity.py`) does 17-keypoint pose tracking gated to
+enrolled team members only (strangers are ignored). Both expose the same
+`.best(frame) -> Detection | None` surface, so nothing downstream changes
+with the backend — see `app/perception/README.md`.
+
 ---
 
 ## Repo layout
@@ -98,11 +106,16 @@ mouse-bot/
 │
 ├── app/                        # MPU (Python)
 │   ├── main.py                 # top-level loop
-│   ├── config.py               # all tunables in one place
+│   ├── config.py               # all tunables in one place, incl. DETECTOR_BACKEND
 │   ├── perception/
+│   │   ├── README.md           # pose+identity backend: setup, enrollment, re-ID design notes
 │   │   ├── camera.py           # ESP32-WROVER MJPEG capture (kit's stock camera) + StubCamera
-│   │   ├── detector.py         # TFLite person detection
-│   │   └── geometry.py         # bbox → bearing + proximity (pure)
+│   │   ├── detector.py         # TFLite bbox person detection ("bbox" backend)
+│   │   ├── geometry.py         # bbox → bearing + proximity (pure)
+│   │   ├── pose_tracker.py     # 17-keypoint pose backends (MediaPipe / MoveNet) + tracker
+│   │   ├── identity.py         # person re-ID: torso signatures, enrollment DB, voting matcher
+│   │   ├── human_style.py      # threaded detection + temporal interpolation + rendering
+│   │   └── pose_identity.py    # PoseIdentityDetector ("pose" backend, gated to enrolled people)
 │   ├── sensing/
 │   │   ├── lidar.py            # LD19 read, mask, merge, sectorize
 │   │   └── ld19_driver.py      # thin wrapper over lds2d's LD19 driver
@@ -113,10 +126,13 @@ mouse-bot/
 │       └── logging.py          # structured run logs
 │
 ├── models/                     # TFLite model(s) live here (gitignored if large)
+├── data/
+│   └── identities/              # enrolled person re-ID signatures (one .npz per person)
 ├── scripts/
 │   ├── benchmark_fps.py        # week-1 gate: detection FPS on the MPU
 │   ├── lidar_viz.py            # visualize/verify merged scan + masks
-│   └── collect_frames.py       # save frames for debug/eval
+│   ├── collect_frames.py       # save frames for debug/eval
+│   └── human_demo.py           # laptop dev tool: enroll people + preview pose+identity tracking
 └── docs/
     └── architecture.md         # message schema, pin map, LiDAR offsets/masks
 ```

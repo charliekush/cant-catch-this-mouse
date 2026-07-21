@@ -5,7 +5,7 @@
 | Concern | Processor | Notes |
 |---|---|---|
 | Camera capture | MPU (Debian) | ELEGOO kit's ESP32-WROVER camera, MJPEG over HTTP via `urllib` (not V4L2/USB) — see note below |
-| Person detection (TFLite) | MPU | `app/perception/detector.py` |
+| Person detection | MPU | `app/perception/detector.py` (TFLite bbox, default) or `app/perception/pose_identity.py` (pose + identity gating, see `app/perception/README.md`) — swappable via `config.DETECTOR_BACKEND` |
 | Bearing / proximity | MPU | `app/perception/geometry.py` (pure) |
 | LiDAR read / mask / merge / sectorize | MPU | both LD19s on MPU UART |
 | Evasion policy | MPU | `app/control/evasion.py` (pure) |

@@ -1,41 +1,47 @@
 """
 human_demo.py
 -------------
-MouseBot perception: smooth stick-figure tracking of ENROLLED people only.
+Laptop-only dev tool for the pose+identity backend (app.perception.pose_identity):
+smooth stick-figure tracking of ENROLLED people only, with a live display.
+
+Owns its own local webcam capture (cv2.VideoCapture) and enrollment UX, which
+the robot loop has no use for -- app.main's --backend pose path talks to
+PoseTracker/IdentityMatcher directly, over the robot's ESP32 camera stream,
+with no display and no local webcam. Use this script to enroll people and to
+sanity-check tracking/identity behavior before trusting it on-robot.
 
 Identity gating: if anyone is enrolled (data/identities/*.npz), the tracker
 verifies the tracked person's torso appearance against the enrolled
-signatures. Enrolled -> green skeleton with their name, bearing sent to the
-MCU. Stranger -> red skeleton labeled UNKNOWN, NO bearing sent (the robot
-ignores them). Disable gating with --any-person.
+signatures. Enrolled -> green skeleton with their name. Stranger -> red
+skeleton labeled UNKNOWN, console shows [ignored]. Disable gating with
+--any-person.
 
 ENROLL each team member once (in demo clothes, in the demo room):
-    python3 human_demo.py --display --enroll jaafar
-    python3 human_demo.py --display --enroll ryan
+    python -m scripts.human_demo --display --enroll jaafar
+    python -m scripts.human_demo --display --enroll ryan
 Stand ~2-3 m back, slowly turn and move around; it auto-collects 40 torso
 samples (~15 s) and saves data/identities/<name>.npz.
 
 RUN:
-    python3 human_demo.py --display                 # laptop
-    python3 human_demo.py --bridge                  # UNO Q, headless
-    python3 human_demo.py --display --any-person    # gating off
-    python3 human_demo.py --display --quality accurate
+    python -m scripts.human_demo --display                 # laptop webcam
+    python -m scripts.human_demo --display --any-person    # gating off
+    python -m scripts.human_demo --display --quality accurate
 """
 
 import argparse
-import os
 import sys
 import time
 
 import cv2
 
-from pose_tracker import PoseTracker, MediaPipePoseDetector, MoveNetDetector
-from human_style import ThreadedPoseTracker, draw_human_style
-from identity import IdentityDB, IdentityMatcher, Enroller, torso_signature
+from app import config
+from app.perception.pose_tracker import (PoseTracker, MediaPipePoseDetector,
+                                         MoveNetDetector)
+from app.perception.human_style import ThreadedPoseTracker, draw_human_style
+from app.perception.identity import (IdentityDB, IdentityMatcher, Enroller,
+                                     torso_signature)
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-DATA = os.path.join(HERE, "..", "data")
-ID_DIR = os.path.join(DATA, "identities")
+MODELS_DIR = "models"
 
 
 def build_detector(quality: str, min_conf: float):
@@ -52,9 +58,9 @@ def build_detector(quality: str, min_conf: float):
         return det
     except ImportError:
         pass
-    name = ("movenet_thunder.tflite" if quality == "accurate"
-            else "movenet_lightning.tflite")
-    path = os.path.join(DATA, name)
+    name = "movenet_thunder.tflite" if quality == "accurate" else "movenet_lightning.tflite"
+    path = f"{MODELS_DIR}/{name}"
+    import os
     if os.path.exists(path):
         print(f"[pose] MoveNet active: {name}")
         return MoveNetDetector(path)
@@ -65,10 +71,10 @@ def build_detector(quality: str, min_conf: float):
 
 def run_enrollment(cap, tracker, name, display):
     """Collect torso signatures for one person and save them."""
-    enroller = Enroller(n_samples=40, sample_gap_s=0.25)
-    db = IdentityDB(ID_DIR)
+    enroller = Enroller()
+    db = IdentityDB(config.IDENTITY_DIR)
     print(f"[enroll] Enrolling '{name}'. Stand 2-3 m back, full body in "
-          f"frame, slowly turn/move. Collecting 40 samples...")
+          f"frame, slowly turn/move. Collecting {enroller.n_samples} samples...")
     while True:
         ok, frame = cap.read()
         if not ok:
@@ -100,14 +106,13 @@ def main():
     ap.add_argument("--width", type=int, default=640)
     ap.add_argument("--height", type=int, default=480)
     ap.add_argument("--quality", choices=["fast", "accurate"], default="fast")
-    ap.add_argument("--confidence", type=float, default=0.5)
+    ap.add_argument("--confidence", type=float, default=config.POSE_MIN_CONFIDENCE)
     ap.add_argument("--display", action="store_true")
-    ap.add_argument("--bridge", action="store_true")
     ap.add_argument("--enroll", metavar="NAME",
                     help="enrollment mode: capture this person's signature")
     ap.add_argument("--any-person", action="store_true",
                     help="disable identity gating (track anyone)")
-    ap.add_argument("--id-threshold", type=float, default=0.55,
+    ap.add_argument("--id-threshold", type=float, default=config.ID_THRESHOLD,
                     help="identity match threshold (raise if strangers pass)")
     args = ap.parse_args()
 
@@ -129,7 +134,7 @@ def main():
             cv2.destroyAllWindows()
         return
 
-    db = IdentityDB(ID_DIR)
+    db = IdentityDB(config.IDENTITY_DIR)
     gate = (len(db) > 0) and not args.any_person
     matcher = IdentityMatcher(db, threshold=args.id_threshold) if gate else None
     if gate:
@@ -140,18 +145,9 @@ def main():
               + ("" if args.any_person else
                  "  (no one enrolled; use --enroll NAME)"))
 
-    bridge = None
-    if args.bridge:
-        try:
-            from arduino.app_utils import Bridge
-            bridge = Bridge
-            print("[bridge] connected - forwarding bearing to MCU")
-        except ImportError:
-            print("[bridge] arduino.app_utils unavailable; console only")
-
     threaded = ThreadedPoseTracker(tracker)
     frames, t0 = 0, time.time()
-    last_print = last_send = 0.0
+    last_print = 0.0
     was_tracking = False
     print("[demo] running. Ctrl-C or 'q' to stop.")
 
@@ -189,10 +185,6 @@ def main():
                       f"(display {frames/(now-t0):.1f} fps, "
                       f"model {threaded.detect_fps:.1f} fps)"
                       + ("" if authorized else "  [ignored]"))
-
-            if authorized and bridge is not None and now - last_send > 0.05:
-                last_send = now
-                bridge.call("set_target", int(track.bearing_deg * 10))
 
             if args.display:
                 if track:
