@@ -580,6 +580,9 @@ models/*.tflite
 data/
 run.csv
 
+# arduino-cli build artifacts
+.build/
+
 # editor
 .vscode/
 .idea/

@@ -1,4 +1,4 @@
-"""Week-1 gate: measure person-detection FPS on the MPU.
+""" measure person-detection FPS on the MPU.
 
 The whole project hinges on this clearing ~10 FPS. Run it on the actual board,
 and re-run with the LiDAR driver(s) active since they share the processor.
