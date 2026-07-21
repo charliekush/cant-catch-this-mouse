@@ -8,15 +8,6 @@
 
 #include "Arduino_RouterBridge.h"
 
-// Pin map confirmed by sketch/polarity_test/polarity_test.ino against
-// ELEGOO's own DeviceDriverSet_xxx0.h/.cpp reference code for this shield:
-// only one direction pin per TB6612 channel is exposed to the MCU (the other
-// direction input is hardwired on the shield PCB), and channel A is
-// physically the RIGHT side while channel B is physically the LEFT side.
-// Both channels share the same positive-is-forward convention.
-const int PWMA = 5, AIN1 = 7; // right motor
-const int PWMB = 6, BIN1 = 8; // left motor
-const int STBY = 3;           // TB6612 standby
 
 // Ultrasonic pins are UNVERIFIED -- confirm against the real chassis wiring
 // before trusting STOP_DISTANCE_M as an actual safety margin.
