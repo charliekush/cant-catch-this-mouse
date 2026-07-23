@@ -7,7 +7,11 @@ scattered through the code so tuning stays sane.
 # ---- Camera / perception ----
 FRAME_WIDTH = 640
 FRAME_HEIGHT = 480
-CAMERA_INDEX = 0                # /dev/video0
+CAMERA_INDEX = 0                # /dev/video0 (find with: v4l2-ctl --list-devices)
+# Capture source: an int V4L2 index (USB webcam) OR a stream URL string
+# (ESP32-CAM, e.g. "http://192.168.4.1:81/stream"). Scripts accept --camera to
+# override this without editing the file.
+CAMERA_SOURCE = CAMERA_INDEX
 DETECT_SCORE_THRESHOLD = 0.5    # min confidence to count a person detection
 PERSON_CLASS_ID = 0             # class index for "person" in the TFLite model
 

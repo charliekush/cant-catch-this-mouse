@@ -9,7 +9,7 @@ and re-run with the LiDAR driver(s) active since they share the processor.
 import argparse
 import time
 
-from app.perception.camera import Camera
+from app.perception.camera import Camera, parse_source
 from app.perception.detector import PersonDetector
 
 
@@ -17,9 +17,12 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--model", default="models/person_detect.tflite")
     ap.add_argument("--frames", type=int, default=200)
+    ap.add_argument("--camera", default=None,
+                    help="V4L2 index (e.g. 0) or stream URL; "
+                         "defaults to config.CAMERA_SOURCE")
     args = ap.parse_args()
 
-    camera = Camera()
+    camera = Camera(parse_source(args.camera))
     detector = PersonDetector(args.model)
 
     # warm up (first inference allocates / JITs)
