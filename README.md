@@ -93,6 +93,42 @@ with the backend — see `app/perception/README.md`.
 
 ---
 
+## Bluetooth command console
+
+`app/control/bt_console.py` runs a small RFCOMM (Bluetooth serial) server on
+the MPU as a wireless remote for the robot, separate from the `app.main`
+evasion loop itself:
+
+```
+python -m app.control.bt_console --front-port /dev/ttyUSB0 --rear-port /dev/ttyUSB1
+```
+
+Pair the board once via `bluetoothctl` (`power on`, `discoverable on`,
+`pairable on`, `agent on`, then pair from your phone/laptop). From a phone,
+any Bluetooth serial-terminal app connecting on RFCOMM channel 1 works. From
+a Linux PC, use `scripts/bt_client.py` rather than the `rfcomm` CLI tool —
+`rfcomm`/`hcitool`/`sdptool` are legacy `bluez-utils` tools deprecated
+upstream and missing on plenty of distros:
+
+```
+python -m scripts.bt_client 14:B5:CD:EA:BB:09
+```
+
+Either way, send one command per line:
+
+- `start` — launch `app.main.run` in a background thread
+- `stop` — signal it to stop and join (the loop's own `finally` block halts
+  the motors via `bridge.stop()`)
+- `usb` — `lsusb` output plus any `/dev/ttyUSB*`/`/dev/ttyACM*` ports found,
+  handy for confirming which port is the front vs. rear LD19
+
+It uses the standard library's `socket.AF_BLUETOOTH`/`BTPROTO_RFCOMM`
+directly (Linux-only, needs BlueZ installed — `sudo apt install bluetooth
+bluez`), so no extra Python package is required. `--stub` makes `start` run
+the evasion loop hardware-free, same as `app.main --stub`.
+
+---
+
 ## Repo layout
 
 ```

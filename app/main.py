@@ -39,7 +39,11 @@ def build_detector(model_path, backend=config.DETECTOR_BACKEND):
     return PersonDetector(model_path)
 
 
-def run(model_path, front_port, rear_port, log_path, stub=False, backend=None):
+def run(model_path, front_port, rear_port, log_path, stub=False, backend=None,
+        stop_event=None):
+    """stop_event, if given, is checked once per loop iteration so callers
+    (e.g. bt_console.py, running the loop in a background thread) can
+    request a clean stop without KeyboardInterrupt."""
     camera = build_camera(stub)
     detector = build_detector(model_path, backend or config.DETECTOR_BACKEND)
     bridge = build_bridge(stub)
@@ -51,7 +55,7 @@ def run(model_path, front_port, rear_port, log_path, stub=False, backend=None):
         rear_lidar = LD19(rear_port)
 
     try:
-        while True:
+        while stop_event is None or not stop_event.is_set():
             t0 = time.time()
 
             # --- perception ---
