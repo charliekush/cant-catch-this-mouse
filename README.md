@@ -165,6 +165,19 @@ unmodified: uint8 input, output order `[boxes, classes, scores]`, person =
 class 0. See `models/README.md` for the full tensor layout and an alternative
 model.
 
+## Watching the camera live in a browser
+
+No display needed on the board -- stream to any browser on the same network:
+
+```
+python3 -m scripts.watch --camera 0                 # raw feed
+python3 -m scripts.watch --camera 0 --annotate       # boxes + identity gate live
+```
+
+Then open `http://<board-hostname>.local:8080/` from your laptop. Frame rate
+and JPEG quality are capped (`--fps`, `--quality`) so the stream does not
+compete with the detector for CPU/bandwidth. Ctrl-C on the board to stop.
+
 ## Testing the vision stack
 
 ```
