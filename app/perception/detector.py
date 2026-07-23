@@ -12,7 +12,24 @@ try:
     # On-device: prefer the standalone tflite-runtime if present.
     from tflite_runtime.interpreter import Interpreter
 except ImportError:
-    from tensorflow.lite.python.interpreter import Interpreter
+    try:
+        # tflite-runtime is discontinued and has no wheels for newer
+        # Python/aarch64 combos; ai-edge-litert is Google's maintained
+        # successor and is what `pip install ai-edge-litert` gives you on
+        # the UNO Q (Debian trixie ships Python 3.13, which tflite-runtime
+        # never got a wheel for).
+        from ai_edge_litert.interpreter import Interpreter
+    except ImportError:
+        try:
+            # Heaviest fallback: full TensorFlow. Works everywhere, including
+            # a Mac dev machine, at the cost of a large install.
+            from tensorflow.lite.python.interpreter import Interpreter
+        except ImportError as exc:
+            raise ImportError(
+                "No TFLite interpreter available. Install one of:\n"
+                "  pip install ai-edge-litert   (recommended, lightweight)\n"
+                "  pip install tensorflow       (heavier, works everywhere)"
+            ) from exc
 
 from .. import config
 

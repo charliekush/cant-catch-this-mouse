@@ -43,16 +43,20 @@ WHITE = (255, 255, 255)
 
 
 def load_detector(model_path):
-    """Import and build the detector, with an actionable error if the TFLite
-    runtime is missing (tflite-runtime has no macOS wheels -- use tensorflow
-    there; on the board install tflite-runtime)."""
+    """Import and build the detector, with an actionable error if no TFLite
+    runtime is available. tflite-runtime is discontinued and has no wheels
+    for newer Python/aarch64 (including the UNO Q's Debian trixie / Python
+    3.13, and macOS); ai-edge-litert is the maintained, lightweight
+    replacement, with tensorflow as the heaviest but most universal fallback.
+    detector.py already tries all three in that order -- this just improves
+    the message when none are installed."""
     try:
         from app.perception.detector import PersonDetector
     except ImportError as exc:
         raise SystemExit(
-            f"No TFLite runtime available ({exc}).\n"
-            "  macOS / laptop:  pip install tensorflow\n"
-            "  UNO Q / Linux:   pip install tflite-runtime")
+            f"No TFLite interpreter available ({exc}).\n"
+            "  Recommended (UNO Q or laptop):  pip install ai-edge-litert\n"
+            "  Heaviest fallback:               pip install tensorflow")
     return PersonDetector(model_path)
 
 
@@ -127,11 +131,12 @@ def annotate(frame, detections, chosen, name, fps, gate_on,
     return frame
 
 
-def iter_frames(source):
-    """Yield (name, frame) from a camera index, an image file, or a directory."""
+def iter_frames(source, camera_arg=None):
+    """Yield (name, frame) from a live camera, an image file, or a directory."""
     if source == "cam":
-        from app.perception.camera import Camera
-        cam = Camera()
+        from app.perception.camera import Camera, parse_source
+        cam = Camera(parse_source(camera_arg))
+        print(f"[preview] capturing from {cam.source!r} at {cam.actual_size()}")
         try:
             while True:
                 frame = cam.read()
@@ -160,7 +165,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--model", default="models/person_detect.tflite")
     ap.add_argument("--source", default="cam",
-                    help="'cam', an image file, or a directory of images")
+                    help="'cam' (use --camera), an image file, or a directory")
     ap.add_argument("--save", metavar="PATH",
                     help="write annotated output here (file, or dir for many)")
     ap.add_argument("--no-window", action="store_true",
@@ -198,7 +203,7 @@ def main():
     t0 = time.time()
 
     try:
-        for name, frame in iter_frames(args.source):
+        for name, frame in iter_frames(args.source, args.camera):
             frames += 1
             detections = detector.detect(frame)
             seen += bool(detections)
