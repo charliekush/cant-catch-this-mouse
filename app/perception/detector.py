@@ -12,7 +12,24 @@ try:
     # On-device: prefer the standalone tflite-runtime if present.
     from tflite_runtime.interpreter import Interpreter
 except ImportError:
-    from tensorflow.lite.python.interpreter import Interpreter
+    try:
+        # tflite-runtime is discontinued and has no wheels for newer
+        # Python/aarch64 combos; ai-edge-litert is Google's maintained
+        # successor and is what `pip install ai-edge-litert` gives you on
+        # the UNO Q (Debian trixie ships Python 3.13, which tflite-runtime
+        # never got a wheel for).
+        from ai_edge_litert.interpreter import Interpreter
+    except ImportError:
+        try:
+            # Heaviest fallback: full TensorFlow. Works everywhere, including
+            # a Mac dev machine, at the cost of a large install.
+            from tensorflow.lite.python.interpreter import Interpreter
+        except ImportError as exc:
+            raise ImportError(
+                "No TFLite interpreter available. Install one of:\n"
+                "  pip install ai-edge-litert   (recommended, lightweight)\n"
+                "  pip install tensorflow       (heavier, works everywhere)"
+            ) from exc
 
 from .. import config
 
@@ -22,8 +39,14 @@ Detection = namedtuple("Detection", ["bbox", "score", "cls"])
 class PersonDetector:
     def __init__(self, model_path,
                  score_threshold=config.DETECT_SCORE_THRESHOLD,
-                 person_class=config.PERSON_CLASS_ID):
-        self.interpreter = Interpreter(model_path=model_path)
+                 person_class=config.PERSON_CLASS_ID,
+                 num_threads=None):
+        # The UNO Q's Cortex-A53 is quad-core; a single-threaded interpreter
+        # leaves 3 cores idle and was measured to fail the 10 FPS gate
+        # (6 FPS) on this board. num_threads=None uses config.DETECT_THREADS.
+        threads = num_threads if num_threads is not None else config.DETECT_THREADS
+        self.interpreter = Interpreter(model_path=model_path,
+                                       num_threads=threads)
         self.interpreter.allocate_tensors()
         self.input_details = self.interpreter.get_input_details()
         self.output_details = self.interpreter.get_output_details()

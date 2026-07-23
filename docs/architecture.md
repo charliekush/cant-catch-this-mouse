@@ -4,8 +4,8 @@
 
 | Concern | Processor | Notes |
 |---|---|---|
-| Camera capture | MPU (Debian) | ELEGOO kit's ESP32-WROVER camera, MJPEG over HTTP via `urllib` (not V4L2/USB) — see note below |
-| Person detection | MPU | `app/perception/detector.py` (TFLite bbox, default) or `app/perception/pose_identity.py` (pose + identity gating, see `app/perception/README.md`) — swappable via `config.DETECTOR_BACKEND` |
+| Camera capture | MPU (Debian) | USB webcam (V4L2) or ESP32-CAM MJPEG stream, see Camera section below |
+| Person detection (TFLite) | MPU | `app/perception/detector.py` |
 | Bearing / proximity | MPU | `app/perception/geometry.py` (pure) |
 | LiDAR read / mask / merge / sectorize | MPU | both LD19s on MPU UART |
 | Evasion policy | MPU | `app/control/evasion.py` (pure) |
@@ -17,39 +17,23 @@ frame can never cause a head-on collision.
 
 ## Camera
 
-The robot currently uses the stock ELEGOO ESP32-WROVER camera module that
-ships with the kit (a second, USB-connected webcam plugged directly into the
-UNO Q's own USB host may be added later, but is not present yet). This module
-is its own microcontroller, not a USB device:
+`app/perception/camera.py` opens `config.CAMERA_SOURCE` through
+`cv2.VideoCapture`, which accepts either a V4L2 device index (int, USB
+webcam) or a stream URL (str). `parse_source()` / `--camera` on the CLI
+scripts pick between them without editing the config file.
 
-- It connects to the main shield only through a 4-pin serial header
-  (`XH2.54-4P`: VCC/GND/TX/RX, UART) used for command relay, never for video.
-- ELEGOO's reference firmware (`docs/ELEGOO Smart Robot Car Kit V4.0
-  2021.04.14/02 Manual & Main Code & APP/04 Code of Carmer (ESP32)/`) boots
-  it in `WIFI_AP` mode with its own SSID and default IP `192.168.4.1`, and
-  registers two HTTP servers via the stock Espressif `app_httpd.cpp`: one on
-  `server_port` (80, `/`, `/control`, `/status`, `/capture` for a single JPEG
-  snapshot) and one on `server_port + 1` (81, `/stream` for the MJPEG feed).
-  A separate TCP socket on port 100 relays JSON motion commands between a
-  connected client and the main board's `Serial2` (UART) — video and control
-  are separate channels, and video never reaches the shield or a USB line.
-
-`app/perception/camera.py` pulls frames from `http://192.168.4.1:81/stream`
-(`config.CAMERA_STREAM_URL`) using the standard library's `urllib` — not
-`requests` (not installed in `.venv`, and not worth adding for this) and not
-`cv2.VideoCapture` on the URL (that backend needs an FFMPEG-enabled OpenCV
-build, which the board's apt `python3-opencv` package isn't guaranteed to
-have; decoding a JPEG buffer via `cv2.imdecode` doesn't need one). It scans
-the byte stream for JPEG SOI/EOI markers rather than parsing the multipart
-boundary and `Content-Length` headers, since a literal `0xFFD8`/`0xFFD9`
-can't appear inside valid JPEG scan data.
-
-**Network prerequisite**: the MPU must already be a WiFi client of the
-ESP32's AP (or of whatever network the ESP32 is reflashed to join in STA
-mode) for any of this to work — `camera.py` does not join the network for
-you. This has not been validated against the real ESP32 yet (see
-`DEVELOPMENT_LOG.md` Next Steps); `StubCamera` in `camera.py` lets
-`python -m app.main --stub` exercise the rest of the loop without it.
+The kit's stock ELEGOO ESP32-WROVER camera module is a stream-URL source: it
+is its own microcontroller, not a USB device. It connects to the main shield
+only through a 4-pin serial header (UART, for command relay), never for
+video. ELEGOO's reference firmware boots it in `WIFI_AP` mode (default IP
+`192.168.4.1`) and serves MJPEG over HTTP at `:81/stream` alongside a
+separate TCP socket on port 100 for JSON motion commands over `Serial2` --
+video and control are distinct channels, and video never touches the shield
+or a USB line. The MPU must already be a WiFi client of that AP (or of
+whatever network the ESP32 is reflashed to join in STA mode); `camera.py`
+does not join the network for you. Not yet validated against the real ESP32
+(see `DEVELOPMENT_LOG.md` Next Steps); `--camera` unset with no ESP32 present
+falls back to `config.CAMERA_INDEX` (a local USB webcam).
 
 ## MPU -> STM32 messages (RPC over the Bridge)
 
@@ -116,3 +100,78 @@ code); the other direction input is hardwired on the shield PCB.
 | PWMB / BIN1 (left motor) | 6 / 8 | [x] |
 | STBY | 3 | [x] |
 | Ultrasonic TRIG / ECHO | 12 / 13 | [ ] |
+
+## Target re-identification (identity gate)
+
+`app/perception/identity.py` implements the proposal's "target re-identification"
+nice-to-have with no extra model: the person bbox's torso region (shirt) becomes
+a smoothed HS histogram, matched against enrolled samples with temporal voting.
+The gate turns on automatically once anyone is enrolled (`scripts/enroll.py`),
+and the main loop treats an unrecognized person as "no pursuer" so the robot
+ignores strangers.
+
+**Multi-candidate selection.** With the gate on, the loop calls
+`detector.detect()` (all people) rather than `detector.best()` (most prominent
+one) and hands every detection to `PursuerSelector`, which returns the
+best-matching enrolled person. This matters because the detector's notion of
+"best" is score/prominence: a stranger standing closer, or simply present
+first, would otherwise occupy the tracker and an enrolled pursuer entering the
+frame would never be evaluated. Each candidate also keeps its OWN voting
+window, associated frame-to-frame by bbox IoU (`ID_IOU_MATCH`), so a
+stranger's low scores never dilute an enrolled person's average -- an enrolled
+pursuer is recognised in exactly `ID_MIN_VOTES` frames regardless of how many
+strangers share the frame. Candidates that go unmatched for
+`ID_CANDIDATE_MAX_MISSED` frames are dropped, so the selector releases a
+pursuer who leaves instead of clinging to a stale box. Cost is sub-millisecond per frame, so it does not threaten
+the 10 FPS week-1 gate. Identity is written to the run log (`identity` column)
+for the evaluation.
+
+Enroll each pursuer in demo clothes, in the demo room:
+
+    python -m scripts.enroll --name charlie
+    python -m scripts.enroll --name jaafar
+
+Tunables live in `app/config.py` under "Identity gate". Limitation: identifies
+clothing, not faces -- two pursuers in near-identical shirts are
+indistinguishable; extreme lighting changes lower scores. This is an acceptable
+trade for a chase robot, since faces are unusable at chase distance / from
+behind (exactly what the camera sees), and it keeps the whole pipeline at one
+model to protect the FPS budget.
+
+
+## Evaluation: time-to-capture
+
+`RunLogger` writes one CSV row per loop iteration; `scripts/analyze_runs.py`
+turns those into the project's headline metric:
+
+    python -m scripts.analyze_runs data/runs/*.csv
+    python -m scripts.analyze_runs data/runs/*.csv --plot survival.png
+
+Survival time is the timestamp of the first `caught == 1` row. Runs where the
+pursuer never crossed `CAUGHT_PROXIMITY` are reported as ESCAPED with survival
+equal to the full run length, so they are not averaged in as instant captures.
+The report also surfaces mean loop FPS (flagged when it falls under the 10 FPS
+gate), how much of the run the pursuer was visible, and how often the robot was
+boxed in -- the last two explain *why* a survival number came out the way it
+did.
+
+Compare configurations by mean survival across several runs, never a single
+run: run-to-run spread is large (the synthetic sanity check showed a ~5 s
+standard deviation across three runs), so one good run proves nothing.
+
+
+## Vision bring-up
+
+`scripts/vision_preview.py` is the visual counterpart to `benchmark_fps.py`:
+where the benchmark answers "is it fast enough", the preview answers "is it
+seeing the right thing, and are the numbers we hand the controller correct".
+It renders detections, the identity gate's choice, and the live bearing /
+proximity values, and it runs on saved frames as well as a live camera, so
+detector regressions can be checked offline without the robot.
+
+Two model-specific assumptions live in `detector.py` and are the usual cause of
+a model that "loads but detects nothing": `_preprocess()` feeds a uint8
+quantized input, and `_read_outputs()` reads output tensors in the order
+`[boxes, classes, scores]`. Run `vision_preview.py --inspect` against a new
+model file to see its actual input dtype and output layout before debugging
+anything else.

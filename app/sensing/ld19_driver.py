@@ -13,9 +13,11 @@ against synthetic packets, but not yet confirmed against a physical LD19 by
 lds2d's maintainers. Validate this wrapper's output against a known object
 with scripts/lidar_viz.py before trusting it for navigation.
 
-Angle convention: degrees, 0 = the LiDAR's forward axis, CCW positive.
+Angle convention here: degrees, 0 = the LiDAR's forward axis, CCW positive.
 lds2d's ScanPoint.angle_deg is 0-360, increasing in the sensor's own scan
-direction
+direction; verify with lidar_viz.py which way that actually runs on your
+unit (a known object placed to one side should land at the expected sign),
+and flip the sign in _parse() below if it turns out to run CW instead.
 """
 
 from collections import namedtuple

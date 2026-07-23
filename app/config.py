@@ -5,45 +5,19 @@ scattered through the code so tuning stays sane.
 """
 
 # ---- Camera / perception ----
-FRAME_WIDTH = 640                # nominal ESP32 stream resolution (its framesize setting)
+FRAME_WIDTH = 640
 FRAME_HEIGHT = 480
-# ESP32-WROVER camera module's MJPEG stream (stock Espressif CameraWebServer
-# layout: stream server on server_port + 1). Default AP IP/port when the
-# module boots in WIFI_AP mode, per ELEGOO's reference firmware. Network
-# prerequisite: the MPU must already be a WiFi client of this AP (or of
-# whatever network the ESP32 is reflashed to join in STA mode) -- camera.py
-# does not join the network for you.
-CAMERA_STREAM_URL = "http://192.168.4.1:81/stream"
-CAMERA_TIMEOUT_S = 5.0           # seconds before a stalled connect/read gives up
+CAMERA_INDEX = 0                # /dev/video0 (find with: v4l2-ctl --list-devices)
+# Capture source: an int V4L2 index (USB webcam) OR a stream URL string
+# (ESP32-CAM, e.g. "http://192.168.4.1:81/stream"). Scripts accept --camera to
+# override this without editing the file.
+CAMERA_SOURCE = CAMERA_INDEX
 DETECT_SCORE_THRESHOLD = 0.5    # min confidence to count a person detection
 PERSON_CLASS_ID = 0             # class index for "person" in the TFLite model
-
-# ---- Detector backend ----
-# "bbox"  -> PersonDetector (detector.py): TFLite SSD, box-height proximity proxy.
-# "pose"  -> PoseIdentityDetector (pose_identity.py): 17-keypoint pose tracking
-#            gated to enrolled people; unknown people report as no detection.
-# Both implement the same .best(frame) -> Detection | None surface, so
-# geometry.py and the rest of the loop don't change with the backend.
-DETECTOR_BACKEND = "bbox"
-
-# ---- Pose + identity backend ----
-CAMERA_HFOV_DEG = 70.42                    # C920 horizontal FOV; recalibrate per camera
-POSE_MODEL_PATH = "models/movenet_lightning.tflite"  # MoveNet SinglePose Lightning (UNO Q path)
-POSE_MIN_CONFIDENCE = 0.5
-POSE_CONFIRM_FRAMES = 3         # consecutive detections before a track is reported
-POSE_EMA_ALPHA = 0.5            # per-keypoint smoothing factor
-POSE_LOST_TIMEOUT_S = 1.0       # track dropped if unseen this long
-POSE_KP_MIN_CONF = 0.3          # keypoint visibility threshold (tracking + bbox synthesis)
-
-IDENTITY_DIR = "data/identities"           # one .npz per enrolled person
-ID_THRESHOLD = 0.55             # raise toward 0.7 if strangers slip through, lower toward 0.45 in bad light
-ID_VOTE_WINDOW = 8              # frames considered for the identity vote
-ID_MIN_VOTES = 3                # min votes in the window before a decision is trusted
-ID_HIST_H_BINS = 30             # hue bins for the torso appearance histogram
-ID_HIST_S_BINS = 32             # saturation bins
-ID_MIN_TORSO_PATCH_PX = 24      # torso crop must be at least this tall/wide to sign
-ENROLL_N_SAMPLES = 40           # torso signatures captured per enrollment
-ENROLL_SAMPLE_GAP_S = 0.25      # min seconds between captured enrollment samples
+DETECT_THREADS = 4              # interpreter threads; the UNO Q's Cortex-A53
+                                 # is quad-core, and 1 thread measured 6 FPS vs
+                                 # the 10 FPS gate. Try 2 or 3 if the LiDAR
+                                 # driver(s) also compete for CPU once running.
 
 # ---- Proximity model ----
 # Person box height (as a fraction of frame height) used as a distance proxy.
@@ -89,3 +63,40 @@ TURN_GAIN = 100                 # how hard bearing maps into differential steeri
 
 # ---- Control loop ----
 LOOP_HZ_TARGET = 10             # aspirational loop rate; gated by detector FPS
+
+
+# ---- Identity gate (target re-ID nice-to-have) ----
+# The robot only flees ENROLLED pursuers; strangers are ignored. Gating turns
+# on automatically once anyone is enrolled (scripts/enroll.py); set
+# IDENTITY_GATE = False to force it off (e.g. for the FPS benchmark).
+IDENTITY_GATE = True
+IDENTITY_DIR = "data/identities"
+ID_MATCH_THRESHOLD = 0.62       # min correlation to accept a match at all
+ID_MATCH_MARGIN = 0.08          # winner must beat the runner-up by this much,
+                                # else the frame is "too close to call" and no
+                                # one is named. THE main fix for confusing
+                                # similar/distant people -- raise to be stricter.
+ID_VOTE_WINDOW = 8              # frames of score history per person
+ID_MIN_VOTES = 3                # frames needed before a decision is allowed
+ID_LOST_FRAMES_RESET = 10       # consecutive no-person frames before vote reset
+# Torso crop as fractions of the person bbox (sample shirt, not arms/background)
+ID_TORSO_X_FRAC = 0.20          # trim this fraction off each side
+ID_TORSO_Y_TOP_FRAC = 0.18      # top of torso band (below the head)
+ID_TORSO_Y_BOT_FRAC = 0.52      # bottom of torso band (above the hips)
+ID_MIN_PATCH_PX = 20            # torso crop smaller than this is unusable
+ID_MIN_PERSON_H_FRAC = 0.35     # person bbox must fill >=35% of frame height;
+                                # smaller = too far to identify reliably, so
+                                # the gate stays silent instead of guessing.
+                                # Lower toward 0.25 if you need longer range and
+                                # accept more risk; raise for stricter, closer-only.
+ID_MIN_SHIRT_PX = 400           # torso must have at least this many non-dark
+                                # pixels for a trustworthy colour histogram
+ID_IOU_MATCH = 0.30             # bbox IoU to treat a detection as the same person
+ID_CANDIDATE_MAX_MISSED = 15    # frames a candidate survives without a match
+# Track lock: once a candidate holds >= ID_LOCK_SCORE for ID_LOCK_SECONDS
+# straight, commit to that identity permanently (for the life of the track) and
+# stop re-questioning it -- gives the servo cam a stable target.
+ID_LOCK_SCORE = 0.90            # sustained score required to commit
+ID_LOCK_SECONDS = 2.0           # how long it must hold before locking
+ID_H_BINS = 30                  # hue histogram bins
+ID_S_BINS = 32                  # saturation histogram bins

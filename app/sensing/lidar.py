@@ -89,4 +89,4 @@ def process(front_points, rear_points):
 def is_cornered(sectors, threshold=config.CORNER_DISTANCE):
     """Corner condition: walls converging ahead on both front-side sectors."""
     return (sectors["front_left"] < threshold and
-            sectors["front_right"] < threshold) 
+            sectors["front_right"] < threshold)

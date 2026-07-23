@@ -12,9 +12,10 @@ import math
 import time
 
 from . import config
-from .perception.camera import Camera, StubCamera
+from .perception.camera import Camera
 from .perception.detector import PersonDetector
 from .perception import geometry
+from .perception import identity
 from .sensing import lidar
 from .sensing.ld19_driver import LD19
 from .control import evasion
@@ -26,28 +27,24 @@ def build_bridge(stub):
     return StubBridge() if stub else BridgeClient()
 
 
-def build_camera(stub):
-    return StubCamera() if stub else Camera()
-
-
-def build_detector(model_path, backend=config.DETECTOR_BACKEND):
-    """Both backends implement .best(frame) -> Detection | None, so nothing
-    downstream (geometry, evasion) needs to know which one is running."""
-    if backend == "pose":
-        from .perception.pose_identity import PoseIdentityDetector
-        return PoseIdentityDetector()
-    return PersonDetector(model_path)
-
-
-def run(model_path, front_port, rear_port, log_path, stub=False, backend=None,
-        stop_event=None):
-    """stop_event, if given, is checked once per loop iteration so callers
-    (e.g. bt_console.py, running the loop in a background thread) can
-    request a clean stop without KeyboardInterrupt."""
-    camera = build_camera(stub)
-    detector = build_detector(model_path, backend or config.DETECTOR_BACKEND)
+def run(model_path, front_port, rear_port, log_path, stub=False):
+    camera = Camera()
+    detector = PersonDetector(model_path)
     bridge = build_bridge(stub)
     logger = RunLogger(log_path)
+
+    # Identity gate: on when anyone is enrolled (see scripts/enroll.py).
+    # When on, EVERY detected person is scored each frame and the best-matching
+    # enrolled one is chosen, so a stranger standing closer (or arriving first)
+    # cannot hold the tracker hostage.
+    id_db = identity.IdentityDB()
+    gate = config.IDENTITY_GATE and len(id_db) > 0
+    selector = identity.PursuerSelector(id_db) if gate else None
+    lost_frames = 0
+    if gate:
+        print(f"[identity] gate ON -- fleeing only: {id_db.names()}")
+    else:
+        print("[identity] gate off -- fleeing any person")
 
     front_lidar = rear_lidar = None
     if not stub:
@@ -55,14 +52,31 @@ def run(model_path, front_port, rear_port, log_path, stub=False, backend=None,
         rear_lidar = LD19(rear_port)
 
     try:
-        while stop_event is None or not stop_event.is_set():
+        while True:
             t0 = time.time()
 
             # --- perception ---
             frame = camera.read()
             if frame is None:
                 continue
-            person = detector.best(frame)
+            pursuer = None
+            if gate:
+                # Score every person in frame; track whoever is enrolled.
+                detections = detector.detect(frame)
+                person, pursuer = selector.select(frame, detections)
+                if person is None:
+                    # Either nobody is in frame, or only strangers are. Reset
+                    # only after a sustained absence of ANY person, so a
+                    # flickered detection does not wipe accumulated votes.
+                    lost_frames = 0 if detections else lost_frames + 1
+                    if lost_frames >= config.ID_LOST_FRAMES_RESET:
+                        selector.reset()
+                else:
+                    lost_frames = 0
+            else:
+                person = detector.best(frame)
+                pursuer = "person" if person is not None else None
+
             if person is not None:
                 bearing = geometry.bbox_to_bearing(person.bbox)
                 proximity = geometry.bbox_to_proximity(person.bbox)
@@ -85,7 +99,7 @@ def run(model_path, front_port, rear_port, log_path, stub=False, backend=None,
             caught = proximity >= config.CAUGHT_PROXIMITY
             fps = 1.0 / max(time.time() - t0, 1e-6)
             logger.log(fps, bearing, proximity, caught,
-                       sectors, left_pwm, right_pwm)
+                       sectors, left_pwm, right_pwm, identity_name=pursuer)
             if caught:
                 print(f"[caught] proximity={proximity:.2f} -- run ends")
                 break
@@ -110,12 +124,8 @@ def main():
     ap.add_argument("--log", default="run.csv")
     ap.add_argument("--stub", action="store_true",
                     help="run with no hardware (fake bridge, no LiDAR)")
-    ap.add_argument("--backend", choices=["bbox", "pose"],
-                    default=config.DETECTOR_BACKEND,
-                    help="person-detection backend (default: config.DETECTOR_BACKEND)")
     args = ap.parse_args()
-    run(args.model, args.front_port, args.rear_port, args.log,
-        stub=args.stub, backend=args.backend)
+    run(args.model, args.front_port, args.rear_port, args.log, stub=args.stub)
 
 
 if __name__ == "__main__":

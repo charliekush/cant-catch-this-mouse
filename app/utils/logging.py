@@ -9,7 +9,7 @@ import time
 
 
 class RunLogger:
-    FIELDS = ["t", "fps", "bearing", "proximity", "caught",
+    FIELDS = ["t", "fps", "bearing", "proximity", "caught", "identity",
               "front", "front_left", "front_right", "left", "right", "rear",
               "left_pwm", "right_pwm"]
 
@@ -19,8 +19,10 @@ class RunLogger:
         self._w.writeheader()
         self._start = time.time()
 
-    def log(self, fps, bearing, proximity, caught, sectors, left_pwm, right_pwm):
+    def log(self, fps, bearing, proximity, caught, sectors, left_pwm,
+            right_pwm, identity_name=None):
         row = {
+            "identity": identity_name or "",
             "t": round(time.time() - self._start, 3),
             "fps": round(fps, 2),
             "bearing": round(bearing, 3) if bearing is not None else "",
