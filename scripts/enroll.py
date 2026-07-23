@@ -17,7 +17,7 @@ import argparse
 import time
 
 from app import config
-from app.perception.camera import Camera
+from app.perception.camera import Camera, parse_source
 from app.perception.detector import PersonDetector
 from app.perception import identity
 
@@ -26,13 +26,16 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--name", required=True, help="pursuer name, e.g. charlie")
     ap.add_argument("--model", default="models/person_detect.tflite")
+    ap.add_argument("--camera", default=None,
+                    help="V4L2 index (e.g. 0) or stream URL; "
+                         "defaults to config.CAMERA_SOURCE")
     ap.add_argument("--samples", type=int, default=120)
     ap.add_argument("--gap", type=float, default=0.12,
                     help="seconds between accepted samples")
     args = ap.parse_args()
 
     name = args.name.strip().lower()
-    camera = Camera()
+    camera = Camera(parse_source(args.camera))
     detector = PersonDetector(args.model)
     db = identity.IdentityDB()
 

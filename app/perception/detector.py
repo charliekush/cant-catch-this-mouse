@@ -39,8 +39,14 @@ Detection = namedtuple("Detection", ["bbox", "score", "cls"])
 class PersonDetector:
     def __init__(self, model_path,
                  score_threshold=config.DETECT_SCORE_THRESHOLD,
-                 person_class=config.PERSON_CLASS_ID):
-        self.interpreter = Interpreter(model_path=model_path)
+                 person_class=config.PERSON_CLASS_ID,
+                 num_threads=None):
+        # The UNO Q's Cortex-A53 is quad-core; a single-threaded interpreter
+        # leaves 3 cores idle and was measured to fail the 10 FPS gate
+        # (6 FPS) on this board. num_threads=None uses config.DETECT_THREADS.
+        threads = num_threads if num_threads is not None else config.DETECT_THREADS
+        self.interpreter = Interpreter(model_path=model_path,
+                                       num_threads=threads)
         self.interpreter.allocate_tensors()
         self.input_details = self.interpreter.get_input_details()
         self.output_details = self.interpreter.get_output_details()

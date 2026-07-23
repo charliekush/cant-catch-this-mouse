@@ -9,7 +9,7 @@ import time
 
 import cv2
 
-from app.perception.camera import Camera
+from app.perception.camera import Camera, parse_source
 
 
 def main():
@@ -17,10 +17,13 @@ def main():
     ap.add_argument("--out", default="data/frames")
     ap.add_argument("--count", type=int, default=100)
     ap.add_argument("--interval", type=float, default=0.2)
+    ap.add_argument("--camera", default=None,
+                    help="V4L2 index (e.g. 0) or stream URL; "
+                         "defaults to config.CAMERA_SOURCE")
     args = ap.parse_args()
 
     os.makedirs(args.out, exist_ok=True)
-    camera = Camera()
+    camera = Camera(parse_source(args.camera))
 
     saved = 0
     while saved < args.count:

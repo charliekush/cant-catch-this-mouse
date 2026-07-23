@@ -14,6 +14,10 @@ CAMERA_INDEX = 0                # /dev/video0 (find with: v4l2-ctl --list-device
 CAMERA_SOURCE = CAMERA_INDEX
 DETECT_SCORE_THRESHOLD = 0.5    # min confidence to count a person detection
 PERSON_CLASS_ID = 0             # class index for "person" in the TFLite model
+DETECT_THREADS = 4              # interpreter threads; the UNO Q's Cortex-A53
+                                 # is quad-core, and 1 thread measured 6 FPS vs
+                                 # the 10 FPS gate. Try 2 or 3 if the LiDAR
+                                 # driver(s) also compete for CPU once running.
 
 # ---- Proximity model ----
 # Person box height (as a fraction of frame height) used as a distance proxy.
