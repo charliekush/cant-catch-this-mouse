@@ -166,6 +166,10 @@ def main():
     ap.add_argument("--model", default="models/person_detect.tflite")
     ap.add_argument("--source", default="cam",
                     help="'cam' (use --camera), an image file, or a directory")
+    ap.add_argument("--camera", default=None,
+                    help="capture source: V4L2 index (e.g. 0) or stream URL "
+                         "(e.g. http://192.168.4.1:81/stream). "
+                         "Defaults to config.CAMERA_SOURCE.")
     ap.add_argument("--save", metavar="PATH",
                     help="write annotated output here (file, or dir for many)")
     ap.add_argument("--no-window", action="store_true",
