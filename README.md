@@ -104,11 +104,7 @@ mouse-bot/
 │   │   ├── camera.py           # USB webcam / ESP32-CAM stream capture
 │   │   ├── detector.py         # TFLite person detection
 │   │   ├── geometry.py         # bbox → bearing + proximity (pure)
-│   │   ├── identity.py         # person re-ID: torso signatures, enrollment DB, voting matcher
-│   │   ├── pose_tracker.py     # pose-backend tracker (currently unwired, see below)
-│   │   ├── pose_identity.py    # pose+identity backend (currently unwired, see below)
-│   │   ├── human_style.py      # threaded detection + temporal interpolation + rendering
-│   │   └── README.md           # pose+identity backend: setup, enrollment, re-ID design notes
+│   │   └── identity.py         # person re-ID: torso signatures, enrollment DB, voting matcher
 │   ├── sensing/
 │   │   ├── lidar.py            # LD19 read, mask, merge, sectorize
 │   │   └── ld19_driver.py      # thin wrapper over lds2d's LD19 driver
@@ -127,7 +123,13 @@ mouse-bot/
 │   ├── lidar_viz.py            # visualize/verify merged scan + masks
 │   ├── collect_frames.py       # save frames for debug/eval
 │   ├── bt_client.py            # Linux Bluetooth client for bt_console.py
-│   └── human_demo.py           # laptop dev tool for the pose backend (currently unwired)
+│   ├── test_camera.py          # verify a camera source (index or stream URL)
+│   ├── vision_preview.py       # annotate frames/live: boxes, identity, [LOCKED]
+│   ├── watch.py                # live MJPEG stream to a browser over WiFi
+│   ├── enroll.py               # enroll a pursuer's appearance signature
+│   ├── analyze_runs.py         # time-to-capture + run stats from logs
+│   ├── stub_smoketest.py       # control path with no hardware
+│   └── fetch_models.sh         # download the TFLite detection model
 └── docs/
     └── architecture.md         # message schema, pin map, LiDAR offsets/masks
 ```
@@ -155,9 +157,6 @@ mouse-bot/
   by lds2d's own maintainers.
 - Keep any STM32 sensor read a single atomic RPC — no multi-round-trip reads.
 - Measure each LD19's mounting offset (x, y, yaw) from the robot center — the scan merge depends on it.
-- `app/perception/pose_tracker.py`, `pose_identity.py`, and `human_style.py` are a pose-based
-  detection backend that is currently unwired from `app.main` (no `--backend` switch); see
-  `DEVELOPMENT_LOG.md` if re-integrating it.
 
 ---
 
